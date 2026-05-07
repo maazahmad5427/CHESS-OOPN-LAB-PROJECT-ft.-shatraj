@@ -35,13 +35,8 @@ public:
     Piece(Color c, char s) : color(c), symbol(s) {}
     virtual ~Piece() {}
 
-    Color getColor() const { 
-        return color;
-    }
-
-    char getSymbol() const { 
-        return symbol;
-    }
+    Color getColor() const { return color; }
+    char getSymbol() const { return symbol; }
 
     virtual bool isValidMove(int srcRow, int srcCol, int destRow, int destCol, Piece* board[8][8]) = 0;
 };
@@ -57,28 +52,37 @@ public:
         int direction = (color == WHITE) ? -1 : 1;
         int startRow = (color == WHITE) ? 6 : 1;
 
-        if (destCol == srcCol && destRow == srcRow + direction && board[destRow][destCol] == nullptr) {
+        // Single step forward
+        if (destCol == srcCol && destRow == srcRow + direction && board[destRow][destCol] == nullptr)
             return true;
-        }
-        
+
+        // Double step from starting row
         if (destCol == srcCol && srcRow == startRow && destRow == srcRow + 2 * direction &&
-            board[srcRow + direction][srcCol] == nullptr && board[destRow][destCol] == nullptr) {
+            board[srcRow + direction][srcCol] == nullptr && board[destRow][destCol] == nullptr)
             return true;
-        }
-        if (std::abs(destCol - srcCol) == 1 && destRow == srcRow + direction && board[destRow][destCol] != nullptr) {
+
+        // Diagonal capture
+        if (abs(destCol - srcCol) == 1 && destRow == srcRow + direction && board[destRow][destCol] != nullptr)
             return board[destRow][destCol]->getColor() != this->color;
-        }
+
         return false;
     }
 };
 
+// ==========================================
+// Rook — tracks whether it has ever moved (needed for castling)
+// ==========================================
 class Rook : public Piece {
+private:
+    bool hasMoved;
 public:
-    Rook(Color c) : Piece(c, c == WHITE ? 'R' : 'r') {}
+    Rook(Color c) : Piece(c, c == WHITE ? 'R' : 'r'), hasMoved(false) {}
+
+    bool getHasMoved() const { return hasMoved; }
+    void setHasMoved(bool m) { hasMoved = m; }
+
     bool isValidMove(int srcRow, int srcCol, int destRow, int destCol, Piece* board[8][8]) override {
-        if (srcRow != destRow && srcCol != destCol) {
-            return false;
-        }
+        if (srcRow != destRow && srcCol != destCol) return false;
         return isPathClear(srcRow, srcCol, destRow, destCol, board);
     }
 };
@@ -87,8 +91,8 @@ class Knight : public Piece {
 public:
     Knight(Color c) : Piece(c, c == WHITE ? 'N' : 'n') {}
     bool isValidMove(int srcRow, int srcCol, int destRow, int destCol, Piece* board[8][8]) override {
-        int rowDiff = std::abs(destRow - srcRow);
-        int colDiff = std::abs(destCol - srcCol);
+        int rowDiff = abs(destRow - srcRow);
+        int colDiff = abs(destCol - srcCol);
         return (rowDiff == 2 && colDiff == 1) || (rowDiff == 1 && colDiff == 2);
     }
 };
@@ -97,9 +101,7 @@ class Bishop : public Piece {
 public:
     Bishop(Color c) : Piece(c, c == WHITE ? 'B' : 'b') {}
     bool isValidMove(int srcRow, int srcCol, int destRow, int destCol, Piece* board[8][8]) override {
-        if (std::abs(destRow - srcRow) != std::abs(destCol - srcCol)) {
-            return false;
-        }
+        if (abs(destRow - srcRow) != abs(destCol - srcCol)) return false;
         return isPathClear(srcRow, srcCol, destRow, destCol, board);
     }
 };
@@ -108,19 +110,28 @@ class Queen : public Piece {
 public:
     Queen(Color c) : Piece(c, c == WHITE ? 'Q' : 'q') {}
     bool isValidMove(int srcRow, int srcCol, int destRow, int destCol, Piece* board[8][8]) override {
-        if (srcRow == destRow || srcCol == destCol || std::abs(destRow - srcRow) == std::abs(destCol - srcCol)) {
+        if (srcRow == destRow || srcCol == destCol ||
+            abs(destRow - srcRow) == abs(destCol - srcCol))
             return isPathClear(srcRow, srcCol, destRow, destCol, board);
-        }
         return false;
     }
 };
 
+// ==========================================
+// King — tracks whether it has ever moved (needed for castling)
+// ==========================================
 class King : public Piece {
+private:
+    bool hasMoved;
 public:
-    King(Color c) : Piece(c, c == WHITE ? 'K' : 'k') {}
+    King(Color c) : Piece(c, c == WHITE ? 'K' : 'k'), hasMoved(false) {}
+
+    bool getHasMoved() const { return hasMoved; }
+    void setHasMoved(bool m) { hasMoved = m; }
+
     bool isValidMove(int srcRow, int srcCol, int destRow, int destCol, Piece* board[8][8]) override {
-        int rowDiff = std::abs(destRow - srcRow);
-        int colDiff = std::abs(destCol - srcCol);
+        int rowDiff = abs(destRow - srcRow);
+        int colDiff = abs(destCol - srcCol);
         return (rowDiff <= 1 && colDiff <= 1);
     }
 };
@@ -131,8 +142,17 @@ public:
 class Board {
 private:
     Piece* grid[8][8];
+
     void findKing(Color c, int& kingR, int& kingC) const;
     bool isSquareUnderAttack(int r, int c, Color opponentColor);
+
+    // Castling helpers
+    bool canCastleKingside(Color c);
+    bool canCastleQueenside(Color c);
+    bool tryCastle(Color c, bool kingside);
+
+    // Pawn promotion helper
+    void handlePromotion(int r, int c, Color c_color);
 
 public:
     Board();
@@ -151,11 +171,11 @@ class Game {
 private:
     Board board;
     Color currentTurn;
-    bool parseInput(std::string input, int& r, int& c);
+    bool parseInput(string input, int& r, int& c);
 
 public:
     Game();
     void play();
 };
 
-#endif // CHESS_H#pragma once
+#endif // CHESS_H
