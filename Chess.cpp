@@ -1,12 +1,135 @@
 #include "Chess.h"
 #include <iostream>
 #include <cctype>
+#include <cmath>
 
 using namespace std;
 
+// ==========================================
+// Piece  Base Class Definitions
+// ==========================================
 
-// Board Methods
+Piece::Piece() : color(NONE), symbol(' ') {}
 
+Piece::Piece(Color c, char s) : color(c), symbol(s) {}
+
+Piece::~Piece() {}
+
+Color Piece::getColor() const { return color; }
+
+char Piece::getSymbol() const { return symbol; }
+
+bool Piece::isPathClear(int srcRow, int srcCol, int destRow, int destCol, Piece* board[8][8]) {
+    int rowStep = (destRow - srcRow) == 0 ? 0 : (destRow - srcRow) / abs(destRow - srcRow);
+    int colStep = (destCol - srcCol) == 0 ? 0 : (destCol - srcCol) / abs(destCol - srcCol);
+
+    int r = srcRow + rowStep;
+    int c = srcCol + colStep;
+
+    while (r != destRow || c != destCol) {
+        if (board[r][c] != nullptr) return false;
+        r += rowStep;
+        c += colStep;
+    }
+    return true;
+}
+
+// ==========================================
+// Pawn Definitions
+// ==========================================
+
+Pawn::Pawn(Color c) : Piece(c, c == WHITE ? 'P' : 'p') {}
+
+bool Pawn::isValidMove(int srcRow, int srcCol, int destRow, int destCol, Piece* board[8][8]) {
+    int direction = (color == WHITE) ? -1 : 1;
+    int startRow = (color == WHITE) ? 6 : 1;
+
+    // Single step forward
+    if (destCol == srcCol && destRow == srcRow + direction && board[destRow][destCol] == nullptr)
+        return true;
+
+    // Double step from starting row
+    if (destCol == srcCol && srcRow == startRow && destRow == srcRow + 2 * direction &&
+        board[srcRow + direction][srcCol] == nullptr && board[destRow][destCol] == nullptr)
+        return true;
+
+    // Diagonal capture
+    if (abs(destCol - srcCol) == 1 && destRow == srcRow + direction && board[destRow][destCol] != nullptr)
+        return board[destRow][destCol]->getColor() != this->color;
+
+    return false;
+}
+
+// ==========================================
+// Rook Definitions
+// ==========================================
+
+Rook::Rook(Color c) : Piece(c, c == WHITE ? 'R' : 'r'), hasMoved(false) {}
+
+bool Rook::getHasMoved() const { return hasMoved; }
+
+void Rook::setHasMoved(bool m) { hasMoved = m; }
+
+bool Rook::isValidMove(int srcRow, int srcCol, int destRow, int destCol, Piece* board[8][8]) {
+    if (srcRow != destRow && srcCol != destCol) return false;
+    return isPathClear(srcRow, srcCol, destRow, destCol, board);
+}
+
+// ==========================================
+// Knight Definitions
+// ==========================================
+
+Knight::Knight(Color c) : Piece(c, c == WHITE ? 'N' : 'n') {}
+
+bool Knight::isValidMove(int srcRow, int srcCol, int destRow, int destCol, Piece* board[8][8]) {
+    int rowDiff = abs(destRow - srcRow);
+    int colDiff = abs(destCol - srcCol);
+    return (rowDiff == 2 && colDiff == 1) || (rowDiff == 1 && colDiff == 2);
+}
+
+// ==========================================
+// Bishop Definitions
+// ==========================================
+
+Bishop::Bishop(Color c) : Piece(c, c == WHITE ? 'B' : 'b') {}
+
+bool Bishop::isValidMove(int srcRow, int srcCol, int destRow, int destCol, Piece* board[8][8]) {
+    if (abs(destRow - srcRow) != abs(destCol - srcCol)) return false;
+    return isPathClear(srcRow, srcCol, destRow, destCol, board);
+}
+
+// ==========================================
+// Queen Definitions
+// ==========================================
+
+Queen::Queen(Color c) : Piece(c, c == WHITE ? 'Q' : 'q') {}
+
+bool Queen::isValidMove(int srcRow, int srcCol, int destRow, int destCol, Piece* board[8][8]) {
+    if (srcRow == destRow || srcCol == destCol ||
+        abs(destRow - srcRow) == abs(destCol - srcCol))
+        return isPathClear(srcRow, srcCol, destRow, destCol, board);
+    return false;
+}
+
+// ==========================================
+// King Definitions
+// ==========================================
+
+King::King(Color c) : Piece(c, c == WHITE ? 'K' : 'k'), hasMoved(false) {}
+
+bool King::getHasMoved() const { return hasMoved; }
+
+void King::setHasMoved(bool m) { hasMoved = m; }
+
+bool King::isValidMove(int srcRow, int srcCol, int destRow, int destCol, Piece* board[8][8]) {
+    int rowDiff = abs(destRow - srcRow);
+    int colDiff = abs(destCol - srcCol);
+    return (rowDiff <= 1 && colDiff <= 1);
+}
+
+// ==========================================
+// Board Definitions
+// ==========================================
 
 Board::Board() {
     for (int r = 0; r < 8; ++r)
@@ -132,30 +255,26 @@ bool Board::isCheckmate(Color c) {
 }
 
 // ==========================================
-// Castling
+// Castling Definitions
 // ==========================================
 
 bool Board::canCastleKingside(Color c) {
     int row = (c == WHITE) ? 7 : 0;
 
-    // King must be on e-file and unmoved
     Piece* king = grid[row][4];
     if (king == nullptr || tolower(king->getSymbol()) != 'k') return false;
     if (static_cast<King*>(king)->getHasMoved()) return false;
 
-    // Rook must be on h-file and unmoved
     Piece* rook = grid[row][7];
     if (rook == nullptr || tolower(rook->getSymbol()) != 'r') return false;
     if (static_cast<Rook*>(rook)->getHasMoved()) return false;
 
-    // Squares f and g must be empty
     if (grid[row][5] != nullptr || grid[row][6] != nullptr) return false;
 
-    // King must not be in check, and must not pass through or land on attacked square
     Color opp = (c == WHITE) ? BLACK : WHITE;
-    if (isSquareUnderAttack(row, 4, opp)) return false;  // e-file (current pos)
-    if (isSquareUnderAttack(row, 5, opp)) return false;  // f-file (pass through)
-    if (isSquareUnderAttack(row, 6, opp)) return false;  // g-file (landing)
+    if (isSquareUnderAttack(row, 4, opp)) return false;
+    if (isSquareUnderAttack(row, 5, opp)) return false;
+    if (isSquareUnderAttack(row, 6, opp)) return false;
 
     return true;
 }
@@ -163,24 +282,20 @@ bool Board::canCastleKingside(Color c) {
 bool Board::canCastleQueenside(Color c) {
     int row = (c == WHITE) ? 7 : 0;
 
-    // King must be on e-file and unmoved
     Piece* king = grid[row][4];
     if (king == nullptr || tolower(king->getSymbol()) != 'k') return false;
     if (static_cast<King*>(king)->getHasMoved()) return false;
 
-    // Rook must be on a-file and unmoved
     Piece* rook = grid[row][0];
     if (rook == nullptr || tolower(rook->getSymbol()) != 'r') return false;
     if (static_cast<Rook*>(rook)->getHasMoved()) return false;
 
-    // Squares b, c, d must be empty
     if (grid[row][1] != nullptr || grid[row][2] != nullptr || grid[row][3] != nullptr) return false;
 
-    // King must not be in check, and must not pass through or land on attacked square
     Color opp = (c == WHITE) ? BLACK : WHITE;
-    if (isSquareUnderAttack(row, 4, opp)) return false;  // e-file (current pos)
-    if (isSquareUnderAttack(row, 3, opp)) return false;  // d-file (pass through)
-    if (isSquareUnderAttack(row, 2, opp)) return false;  // c-file (landing)
+    if (isSquareUnderAttack(row, 4, opp)) return false;
+    if (isSquareUnderAttack(row, 3, opp)) return false;
+    if (isSquareUnderAttack(row, 2, opp)) return false;
 
     return true;
 }
@@ -198,7 +313,6 @@ bool Board::tryCastle(Color c, bool kingside) {
     King* king = static_cast<King*>(grid[row][kingCol]);
     Rook* rook = static_cast<Rook*>(grid[row][rookFrom]);
 
-    // Move pieces
     grid[row][kingTo] = king;
     grid[row][rookTo] = rook;
     grid[row][kingCol] = nullptr;
@@ -212,7 +326,7 @@ bool Board::tryCastle(Color c, bool kingside) {
 }
 
 // ==========================================
-// Pawn Promotion
+// Pawn Promotion Definition
 // ==========================================
 
 void Board::handlePromotion(int r, int c, Color pieceColor) {
@@ -227,7 +341,7 @@ void Board::handlePromotion(int r, int c, Color pieceColor) {
         if (choice == 'Q' || choice == 'R' || choice == 'B' || choice == 'N') break;
         cout << "Invalid choice. Enter Q, R, B, or N: ";
         cin.clear();
-        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        cin.ignore(1000, '\n');
     }
 
     delete grid[r][c];
@@ -243,7 +357,7 @@ void Board::handlePromotion(int r, int c, Color pieceColor) {
 }
 
 // ==========================================
-// Move Piece
+// movePiece Definition
 // ==========================================
 
 bool Board::movePiece(Color currentTurn, int srcR, int srcC, int destR, int destC) {
@@ -258,14 +372,13 @@ bool Board::movePiece(Color currentTurn, int srcR, int srcC, int destR, int dest
         return false;
     }
 
-    // ---- Castling detection ----
-    // If the king is moving two squares horizontally, attempt castling
+    // Castling detection
     if (tolower(p->getSymbol()) == 'k' && srcR == destR && abs(destC - srcC) == 2) {
         bool kingside = (destC > srcC);
         return tryCastle(currentTurn, kingside);
     }
 
-    // ---- Normal move validation ----
+    // Normal move validation
     if (grid[destR][destC] != nullptr && grid[destR][destC]->getColor() == currentTurn) {
         cout << "You cannot capture your own piece!\n";
         return false;
@@ -291,18 +404,18 @@ bool Board::movePiece(Color currentTurn, int srcR, int srcC, int destR, int dest
         return false;
     }
 
-    // ---- Commit move ----
+    // Commit move
     if (capturedPiece != nullptr) delete capturedPiece;
     grid[destR][destC] = p;
     grid[srcR][srcC] = nullptr;
 
-    // Mark King/Rook as moved (for castling rights)
+    // Mark King/Rook as moved
     if (tolower(p->getSymbol()) == 'k')
         static_cast<King*>(p)->setHasMoved(true);
     else if (tolower(p->getSymbol()) == 'r')
         static_cast<Rook*>(p)->setHasMoved(true);
 
-    // ---- Pawn promotion ----
+    // Pawn promotion check
     if (tolower(p->getSymbol()) == 'p') {
         int promRow = (p->getColor() == WHITE) ? 0 : 7;
         if (destR == promRow)
@@ -313,7 +426,7 @@ bool Board::movePiece(Color currentTurn, int srcR, int srcC, int destR, int dest
 }
 
 // ==========================================
-// Game Methods
+// Game Definitions
 // ==========================================
 
 Game::Game() : currentTurn(WHITE) {}
